@@ -2,6 +2,7 @@ from collections import ChainMap, namedtuple
 from typing import List, Dict, Set
 
 import psutil
+import os
 
 
 def _prefixed(nt: namedtuple, prefix):
@@ -41,6 +42,27 @@ def _prefixed_items_from_dict(values: Dict[str, namedtuple], item_prefix, prefix
     for key, nt in values.items():
         result["%s%s" % (item_prefix, key)] = _parse(nt, prefix, tag_names)
     return result
+
+try:
+    _gla = os.getloadavg
+except AttributeError:
+    _gla = None
+def get_load_stats():
+    global _gla
+    if _gla:
+        load = _gla()
+        return {
+            "load" : {
+                "fields": {
+                    "load_1min" : load[0],
+                    "load_5min": load[1],
+                    "load_15min": load[2],
+                },
+                "tags": {},
+            }
+        }
+    else:
+        return {}
 
 
 def get_cpu_stats():
@@ -89,6 +111,7 @@ def get_fan_stats():
 
 def get_all_stats():
     result = ChainMap(
+        get_load_stats(),
         get_cpu_stats(),
         get_vm_stats(),
         get_swap_stats(),

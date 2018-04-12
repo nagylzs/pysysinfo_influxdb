@@ -3,7 +3,6 @@ import datetime
 import functools
 import time
 
-from dateutil import tz
 import sys
 import pprint
 import argparse
