@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 import datetime
+import functools
+import time
+
 from dateutil import tz
 import sys
 import pprint
@@ -14,7 +17,64 @@ from influxdb.exceptions import InfluxDBClientError
 if sys.version_info.major < 3:
     raise SystemExit("You must run this program with python version 3.")
 
-extra_tags = {"hostname": platform.node()}
+def debug(args, s):
+    if args.debug:
+        print(s)
+
+def error(s):
+    sys.stderr.write(s)
+    sys.stderr.flush()
+
+
+def main(args):
+    d = functools.partial(debug, args)
+    is_first = False
+    while True:
+        d("Getting stats...")
+        stats = get_all_stats()
+        now = datetime.datetime.utcnow().isoformat()
+        d(now)
+        points = []
+        for measurement_name, data in stats.items():
+            data["measurement"] = measurement_name
+            data["time"] = now
+            data["tags"].update(default_extra_tags)
+            points.append(data)
+        if args.verbose:
+            pprint.pprint(points)
+        if not args.no_send:
+            d("Connecting influxdb...")
+            db = InfluxDBClient(
+                host=args.host,
+                port=args.port,
+                ssl=args.ssl,
+                verify_ssl=not args.insecure,
+                username=args.user,
+                password=args.password or "",
+                database=args.database)
+            try:
+                if args.create_database and is_first:
+                    d("Creating database", args.database)
+                    db.create_database(args.database)
+                    is_first = False
+                d("Sending results...")
+                db.write_points(points)
+                d("Closing database")
+                db.close()
+            except InfluxDBClientError as e:
+                error("%s %s\n" % (e.code, e.content))
+                raise SystemExit(1)
+            d("Send successful")
+        else:
+            d("Won't send (--no-send specified)")
+
+        if args.loop:
+            time.sleep(args.loop)
+        else:
+            break
+
+
+default_extra_tags = {"hostname": platform.node()}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -47,9 +107,15 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--ask-password", default=False, action="store_true",
                         help="Ask for InfluxDb password. If you didn't enable authentication, then do not "
                              "specify this option.")
+    parser.add_argument("-e", "--extra-tags", default=default_extra_tags,
+                        help="Extra tags to add, defaults to : '%s' " % default_extra_tags)
 
-    parser.add_argument("-e", "--extra-tags", default=extra_tags,
-                        help="Extra tags to add, defaults to : '%s' " % extra_tags)
+    parser.add_argument("-l", "--loop", default=None, type=float,
+                        help="Send data in an endless loop, wait the specified number of seconds between"
+                             "the sends. You can break the loop with Ctrl+C or by sending a TERM signal.")
+    parser.add_argument("-i", "--ignore-errors", default=False, action="store_true",
+                        help="Continue the loop even if there is an error.")
+
 
     args = parser.parse_args()
 
@@ -58,43 +124,10 @@ if __name__ == "__main__":
             parser.error("Conflicting options: cannot use --password and --ask-password at the same time.")
         args.password = getpass()
 
-    def debug(s):
-        if args.debug:
-            print(s)
+    if args.loop and args.loop < 0.1:
+        parser.error("Loop time must be > 0.1 sec!")
 
-    debug("Getting stats...")
-    stats = get_all_stats()
-    now = datetime.datetime.utcnow().isoformat()
-    points = []
-    for measurement_name, data in stats.items():
-        data["measurement"] = measurement_name
-        data["time"] = now
-        data["tags"].update(extra_tags)
-        points.append(data)
-    if args.verbose:
-        pprint.pprint(points)
-    if not args.no_send:
-        debug("Connecting influxdb...")
-        db = InfluxDBClient(
-            host=args.host,
-            port=args.port,
-            ssl=args.ssl,
-            verify_ssl=not args.insecure,
-            username=args.user,
-            password=args.password or "",
-            database=args.database)
-        try:
-            if args.create_database:
-                debug("Creating database", args.database)
-                db.create_database(args.database)
-            debug("Sending results...")
-            db.write_points(points)
-            debug("Closing database")
-            db.close()
-        except InfluxDBClientError as e:
-            sys.stderr.write("%s %s\n" % (e.code, e.content))
-            sys.stderr.flush()
-            raise SystemExit(1)
-        debug("Send successful")
-    else:
-        debug("Won't send (--no-send specified)")
+    if not args.loop and args.ignore_errors:
+        parser.error("--ignore-errors can only be used together with --loop")
+
+    main(args)
