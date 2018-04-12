@@ -64,8 +64,13 @@ def get_load_stats():
     else:
         return {}
 
-
+_has_cpu_info = None
 def get_cpu_stats():
+    global _has_cpu_info
+    if _has_cpu_info is None:
+        _has_cpu_info = psutil.cpu_freq() is not None
+    if not _has_cpu_info:
+        return {}
     fields = dict(
         count_physical=psutil.cpu_count(False),
         count_logical=psutil.cpu_count(True),
