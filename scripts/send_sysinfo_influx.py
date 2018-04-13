@@ -97,7 +97,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("-v", "--verbose", default=False, action="store_true",
                         help="Be verbose (the default is to be silent)")
-    parser.add_argument("-s", "--silent", default=False, action="store_true",
+    parser.add_argument("--silent", default=False, action="store_true",
                         help="Be silent (do not even print error messages)")
     parser.add_argument("--debug", default=False, action="store_true",
                         help="Print debug messages")
