@@ -1,8 +1,9 @@
-from collections import ChainMap, namedtuple
-from typing import List, Dict, Set
-
 import psutil
 import os
+import copy
+
+from collections import ChainMap, namedtuple
+from typing import List, Dict, Set
 
 
 def _prefixed(nt: namedtuple, prefix):
@@ -36,25 +37,58 @@ def _prefixed_items_from_list(items: List[namedtuple], item_prefix, prefix, tag_
     return result
 
 
-def _prefixed_items_from_dict(values: Dict[str, namedtuple], item_prefix, prefix, tag_names: Set[str] = set([])):
+def _prefixed_items_from_dict(values: Dict[str, namedtuple], item_prefix, prefix, tag_names: Set[str] = set([]),
+                              cumulative=False):
     """Convert a named tuple into a dict with prefixed names."""
     result = {}
     for key, nt in values.items():
-        result["%s%s" % (item_prefix, key)] = _parse(nt, prefix, tag_names)
+        item_key = "%s%s" % (item_prefix, key)
+        item = _parse(nt, prefix, tag_names)
+        if cumulative:
+            item = _cumulative_diff(item, item_key)
+        result[item_key] = item
     return result
+
+
+_prev_values = {}
+
+
+def _cumulative_diff(item, key):
+    """Return a version that converts cumulative field values to their differences."""
+    global _prev_values
+    if key in _prev_values:
+        # Subsequent item, return difference from previous
+        result = copy.copy(item)
+        fields = result["fields"]
+        prev_fields = _prev_values[key]["fields"]
+        for fname in fields:
+            fields[fname] -= prev_fields[fname]
+        _prev_values[key] = item
+        return result
+    else:
+        # First item, no difference, return zeros.
+        _prev_values[key] = item
+        result = copy.copy(item)
+        fields = result["fields"]
+        for fname in fields:
+            fields[fname] = 0
+        return result
+
 
 try:
     _gla = os.getloadavg
 except AttributeError:
     _gla = None
+
+
 def get_load_stats():
     global _gla
     if _gla:
         load = _gla()
         return {
-            "load" : {
+            "load": {
                 "fields": {
-                    "load_1min" : load[0],
+                    "load_1min": load[0],
                     "load_5min": load[1],
                     "load_15min": load[2],
                 },
@@ -64,7 +98,10 @@ def get_load_stats():
     else:
         return {}
 
+
 _has_cpu_info = None
+
+
 def get_cpu_stats():
     global _has_cpu_info
     if _has_cpu_info is None:
@@ -95,15 +132,22 @@ def get_swap_stats():
 
 def get_disk_io_stats():
     result = {}
-    result["disk"] = _parse(psutil.disk_io_counters(False), "")
-    result.update(_prefixed_items_from_dict(psutil.disk_io_counters(True), "disk_", ""))
+    disk = _parse(psutil.disk_io_counters(perdisk=False, nowrap=True), "")
+    result["disk"] = _cumulative_diff(disk, "disk")
+    result.update(_prefixed_items_from_dict(
+        psutil.disk_io_counters(perdisk=True, nowrap=True),
+        item_prefix="disk_", prefix="", cumulative=True
+    ))
     return result
 
 
 def get_net_io_stats():
     result = {}
-    result["net"] = _parse(psutil.net_io_counters(False), "")
-    result.update(_prefixed_items_from_dict(psutil.net_io_counters(True), "net_", ""))
+    net = _parse(psutil.net_io_counters(pernic=False, nowrap=True), "")
+    result["net"] = _cumulative_diff(net, "net")
+    result.update(_prefixed_items_from_dict(
+        psutil.net_io_counters(pernic=True, nowrap=True),
+        item_prefix="net_", prefix="", cumulative=True))
     return result
 
 
