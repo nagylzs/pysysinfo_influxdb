@@ -58,12 +58,13 @@ def _cumulative_diff(item, key):
     global _prev_values
     if key in _prev_values:
         # Subsequent item, return difference from previous
-        result = copy.copy(item)
-        fields = result["fields"]
-        prev_fields = _prev_values[key]["fields"]
-        for fname in fields:
-            fields[fname] -= prev_fields[fname]
+        prev = _prev_values[key]
         _prev_values[key] = item
+
+        result = copy.copy(item)
+        for fname in result["fields"]:
+            result["fields"][fname] -= prev["fields"][fname]
+
         return result
     else:
         # First item, no difference, return zeros.
