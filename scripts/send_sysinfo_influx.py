@@ -7,26 +7,31 @@ import sys
 import pprint
 import argparse
 import platform
+import traceback
 from getpass import getpass
 
 from pysysinfo_influxdb import get_all_stats
 from influxdb import InfluxDBClient
-from influxdb.exceptions import InfluxDBClientError
+from influxdb.exceptions import InfluxDBClientError, InfluxDBServerError
 
 if sys.version_info.major < 3:
     raise SystemExit("You must run this program with python version 3.")
+
 
 def debug(args, s):
     if args.debug:
         print(s)
 
-def error(s):
-    sys.stderr.write(s)
-    sys.stderr.flush()
+
+def error(args, s):
+    if not args.silent:
+        sys.stderr.write(s)
+        sys.stderr.flush()
 
 
 def main(args):
     d = functools.partial(debug, args)
+    e = functools.partial(error, args)
     is_first = False
     while True:
         d("Getting stats...")
@@ -42,28 +47,39 @@ def main(args):
         if args.verbose:
             pprint.pprint(points)
         if not args.no_send:
-            d("Connecting influxdb...")
-            db = InfluxDBClient(
-                host=args.host,
-                port=args.port,
-                ssl=args.ssl,
-                verify_ssl=not args.insecure,
-                username=args.user,
-                password=args.password or "",
-                database=args.database)
             try:
-                if args.create_database and is_first:
-                    d("Creating database", args.database)
-                    db.create_database(args.database)
-                    is_first = False
-                d("Sending results...")
-                db.write_points(points)
-                d("Closing database")
-                db.close()
-            except InfluxDBClientError as e:
-                error("%s %s\n" % (e.code, e.content))
-                raise SystemExit(1)
-            d("Send successful")
+                d("Connecting influxdb...")
+                db = InfluxDBClient(
+                    host=args.host,
+                    port=args.port,
+                    ssl=args.ssl,
+                    verify_ssl=not args.insecure,
+                    username=args.user,
+                    password=args.password or "",
+                    database=args.database)
+                try:
+                    if args.create_database and is_first:
+                        d("Creating database", args.database)
+                        db.create_database(args.database)
+                        is_first = False
+                    d("Sending results...")
+                    db.write_points(points)
+                    d("Closing database")
+                    db.close()
+                except InfluxDBClientError as exc:
+                    e("%s %s\n" % (exc.code, exc.content))
+                    raise exc
+                except Exception:
+                    e(traceback.format_exc())
+                    raise
+                d("Send successful")
+            except:
+                if args.ignore_errors:
+                    e("--ignore-errors specified, will retry after 10 seconds.")
+                    time.sleep(10)
+                else:
+                    raise SystemExit(1)
+
         else:
             d("Won't send (--no-send specified)")
 
@@ -81,6 +97,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("-v", "--verbose", default=False, action="store_true",
                         help="Be verbose (the default is to be silent)")
+    parser.add_argument("-s", "--silent", default=False, action="store_true",
+                        help="Be silent (do not even print error messages)")
     parser.add_argument("--debug", default=False, action="store_true",
                         help="Print debug messages")
     parser.add_argument("-n", "--no-send", default=False, action="store_true",
@@ -115,7 +133,6 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--ignore-errors", default=False, action="store_true",
                         help="Continue the loop even if there is an error.")
 
-
     args = parser.parse_args()
 
     if args.ask_password:
@@ -128,5 +145,8 @@ if __name__ == "__main__":
 
     if not args.loop and args.ignore_errors:
         parser.error("--ignore-errors can only be used together with --loop")
+
+    if args.silent and (args.verbose or args.debug):
+        parser.error("--silent should not be combined with --verbose or --debug")
 
     main(args)
