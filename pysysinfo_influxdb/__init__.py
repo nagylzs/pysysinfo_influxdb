@@ -61,7 +61,7 @@ def _cumulative_diff(item, key):
         prev = _prev_values[key]
         _prev_values[key] = item
 
-        result = copy.copy(item)
+        result = copy.deepcopy(item)
         for fname in result["fields"]:
             result["fields"][fname] -= prev["fields"][fname]
 
@@ -69,7 +69,7 @@ def _cumulative_diff(item, key):
     else:
         # First item, no difference, return zeros.
         _prev_values[key] = item
-        result = copy.copy(item)
+        result = copy.deepcopy(item)
         fields = result["fields"]
         for fname in fields:
             fields[fname] = 0

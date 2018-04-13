@@ -18,6 +18,13 @@ if sys.version_info.major < 3:
     raise SystemExit("You must run this program with python version 3.")
 
 
+#TESTING
+#while True:
+#    stats = get_all_stats()
+#    time.sleep(1)
+#    pprint.pprint(stats["disk"]["fields"]["read_bytes"])
+
+
 def debug(args, s):
     if args.debug:
         print(s)
