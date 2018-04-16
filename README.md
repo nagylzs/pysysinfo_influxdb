@@ -13,8 +13,8 @@ This is a simple script that is packaged into a single python file. It is design
 installation on any machine that has python3 installed, with minimal dependencies. Only external dependencies are
 psutil and influxdb. If you prefer to use virtual environments, a pipfile is also provided.
 
-Quick and dirty installation on Linux systems
----------------------------------------------
+Quick and dirty installation on Debian based systems
+----------------------------------------------------
 
 Make sure that you have python 3 installed. This program won't work with python 2.
 
@@ -22,7 +22,7 @@ Make sure that you have python 3 installed. This program won't work with python 
     apt-get install python3-pip
     python3 -m pip install --upgrade pip
     pip3 install psutil influxdb
-    wget https://github.com/nagylzs/pysysinfo_influxdb/blob/master/scripts/send_sysinfo_influx.py
+    wget https://raw.githubusercontent.com/nagylzs/pysysinfo_influxdb/master/scripts/send_sysinfo_influx.py
 
 Then you are ready to go with "python3 send_sysinfo_influx.py".
 
