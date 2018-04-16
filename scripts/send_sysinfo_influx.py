@@ -8,6 +8,7 @@ import pprint
 import argparse
 import platform
 import traceback
+import json
 from getpass import getpass
 
 from influxdb import InfluxDBClient
@@ -320,5 +321,8 @@ if __name__ == "__main__":
 
     if args.silent and (args.verbose or args.debug):
         parser.error("--silent should not be combined with --verbose or --debug")
+
+    if isinstance(args.extra_tags, str):
+        args.extra_tags = json.loads(args.extra_tags)
 
     main(args)
