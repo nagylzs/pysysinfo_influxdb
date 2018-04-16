@@ -18,10 +18,10 @@ Quick and dirty installation on Debian based systems
 
 Make sure that you have python 3 installed. This program won't work with python 2.
 
-    apt-get install python3-dev
-    apt-get install python3-pip
-    python3 -m pip install --upgrade pip
-    pip3 install psutil influxdb
+    sudo apt-get install python3-dev
+    sudo apt-get install python3-pip
+    sudo python3 -m pip install --upgrade pip
+    sudo pip3 install psutil influxdb
     wget https://raw.githubusercontent.com/nagylzs/pysysinfo_influxdb/master/scripts/send_sysinfo_influx.py
 
 Then you are ready to go with "python3 send_sysinfo_influx.py".
@@ -53,6 +53,9 @@ Planned features
 
 Usage
 =====
+
+In all cases, please consult the manual of your own copy. This readme
+may be out of date.
 
     python3 scripts/send_sysinfo_influx.py --help
     usage: send_sysinfo_influx.py [-h] [-v] [--silent] [--debug] [-n]
@@ -90,3 +93,14 @@ Usage
                             loop with Ctrl+C or by sending a TERM signal.
       -i, --ignore-errors   Continue the loop even if there is an error.
 
+
+More notes on --extra tags:
+
+You can specify extra tags with --extra-tags. By default,
+it only contains your hostname. Example usage of --extra-tags:
+
+
+    python3 scripts/send_sysinfo_influx.py --extra-tags '{"your_tag_name":"your_tag_value"}' -n -v
+
+
+It is a good practice to check your data with "-v -n" before sending them to a live server.
