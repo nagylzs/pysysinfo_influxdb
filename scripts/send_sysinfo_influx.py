@@ -223,8 +223,6 @@ def get_docker_stats():
         memory_used, memory_limit = _parse_docker_pair(mem_usage)
         net_sent, net_received = _parse_docker_pair(net_io)
         block_read, block_written = _parse_docker_pair(block_io)
-        sinspect = subprocess.check_output("docker inspect %s" % cid, shell=True).decode("UTF-8")
-        inspect = json.loads(sinspect)[0]
         item = {
             'tags': {'container': cid, 'name': cname, },
             'fields': {
@@ -239,8 +237,11 @@ def get_docker_stats():
                 'pid_cnt': int(pid_cnt)
             }
         }
-        for key in inspect["State"]:
-            item['tags']["state_%s" % key] = inspect["State"][key]
+        if args.docker_stats_extra:
+            sinspect = subprocess.check_output("docker inspect %s" % cid, shell=True).decode("UTF-8")
+            inspect = json.loads(sinspect)[0]
+            for key in inspect["State"]:
+                item['tags']["state_%s" % key] = inspect["State"][key]
         result.append(item)
     return result
 
@@ -273,6 +274,7 @@ def main(args):
     e = functools.partial(error, args)
     is_first = False
     while True:
+        started = time.time()
         d("Getting stats...")
         stats = get_all_stats()
         now = datetime.datetime.utcnow().isoformat()
@@ -290,6 +292,9 @@ def main(args):
                 data["time"] = now
                 data["tags"].update(default_extra_tags)
                 points.append(data)
+
+        stopped = time.time()
+        d("Collected stats in %.3f sec" % (stopped - started))
 
         if args.verbose:
             pprint.pprint(points)
@@ -331,7 +336,9 @@ def main(args):
             d("Won't send (--no-send specified)")
 
         if args.loop:
+            d("Will wait for --loop=%s" % args.loop)
             time.sleep(args.loop)
+            d("Wait complete.")
         else:
             break
 
@@ -375,6 +382,8 @@ if __name__ == "__main__":
                         help="Extra tags to add, defaults to : '%s' " % default_extra_tags)
     parser.add_argument("--docker-stats", default=False, action="store_true",
                         help="Use 'docker stats' to retrieve docker statistics. Works with 18.03+")
+    parser.add_argument("--docker-stats-extra", default=False, action="store_true",
+                        help="Use 'docker inspect' to retrieve extra docker statistics. This is CPU intensive.")
 
     parser.add_argument("-l", "--loop", default=None, type=float,
                         help="Send data in an endless loop, wait the specified number of seconds between"
