@@ -25,6 +25,7 @@ import copy
 from collections import ChainMap, namedtuple
 from typing import List, Dict, Set
 
+hostname = platform.node()
 
 def _prefixed(nt: namedtuple, prefix):
     """Convert a named tuple into a dict with prefixed names."""
@@ -220,11 +221,15 @@ def get_docker_stats():
         if not line:
             continue
         cid, cname, cpu_perc, mem_perc, mem_usage, net_io, block_io, pid_cnt = line.split("|")
+        if "." in cname:
+            common_name = cname.split(".")[0]+"."+hostname
+        else:
+            common_name = cname
         memory_used, memory_limit = _parse_docker_pair(mem_usage)
         net_sent, net_received = _parse_docker_pair(net_io)
         block_read, block_written = _parse_docker_pair(block_io)
         item = {
-            'tags': {'container': cid, 'name': cname, },
+            'tags': {'container_id': cid, 'container_name': cname, 'common_name': common_name },
             'fields': {
                 'cpu_percent': _parse_docker_value(cpu_perc),
                 'memory_percent': _parse_docker_value(mem_perc),
@@ -343,7 +348,7 @@ def main(args):
             break
 
 
-default_extra_tags = {"hostname": platform.node()}
+default_extra_tags = {"hostname": hostname}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
