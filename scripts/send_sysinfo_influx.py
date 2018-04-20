@@ -13,7 +13,7 @@ import json
 from getpass import getpass
 
 from influxdb import InfluxDBClient
-from influxdb.exceptions import InfluxDBClientError, InfluxDBServerError
+from influxdb.exceptions import InfluxDBClientError
 
 if sys.version_info.major < 3:
     raise SystemExit("You must run this program with python version 3.")
@@ -25,7 +25,6 @@ import copy
 from collections import ChainMap, namedtuple
 from typing import List, Dict, Set
 
-hostname = platform.node()
 
 def _prefixed(nt: namedtuple, prefix):
     """Convert a named tuple into a dict with prefixed names."""
@@ -222,7 +221,7 @@ def get_docker_stats():
             continue
         cid, cname, cpu_perc, mem_perc, mem_usage, net_io, block_io, pid_cnt = line.split("|")
         if "." in cname:
-            common_name = cname.split(".")[0]+"."+hostname
+            common_name = cname.split(".")[0]+"."+ default_extra_tags["hostname"]
         else:
             common_name = cname
         memory_used, memory_limit = _parse_docker_pair(mem_usage)
@@ -348,7 +347,7 @@ def main(args):
             break
 
 
-default_extra_tags = {"hostname": hostname}
+default_extra_tags = {"hostname": platform.node()}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

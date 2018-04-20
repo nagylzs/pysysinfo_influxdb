@@ -62,6 +62,7 @@ may be out of date.
                                   [--host HOST] [-p PORT] [-s] [--insecure]
                                   [-d DATABASE] [--create-database] [-u USER]
                                   [--password PASSWORD] [-a] [-e EXTRA_TAGS]
+                                  [--docker-stats] [--docker-stats-extra]
                                   [-l LOOP] [-i]
 
     Collect and send system information to an influxdb database.
@@ -88,19 +89,41 @@ may be out of date.
       -e EXTRA_TAGS, --extra-tags EXTRA_TAGS
                             Extra tags to add, defaults to : '{'hostname':
                             'nagy'}'
+      --docker-stats        Use 'docker stats' to retrieve docker statistics.
+                            Works with 18.03+
+      --docker-stats-extra  Use 'docker inspect' to retrieve extra docker
+                            statistics. This is CPU intensive.
       -l LOOP, --loop LOOP  Send data in an endless loop, wait the specified
                             number of seconds betweenthe sends. You can break the
                             loop with Ctrl+C or by sending a TERM signal.
       -i, --ignore-errors   Continue the loop even if there is an error.
 
 
-More notes on --extra tags:
+Notes on --extra tags:
 
 You can specify extra tags with --extra-tags. By default,
 it only contains your hostname. Example usage of --extra-tags:
 
 
     python3 scripts/send_sysinfo_influx.py --extra-tags '{"your_tag_name":"your_tag_value"}' -n -v
+
+Notes on --socker-stats:
+
+* It was only tested on Linux and Docker 18.03 CE
+* The collected data includes these tags: container_id, container_name, common_name.
+  The common_name is a name that is constructed from the container name plus the hostname.
+  It was added because you cannot specify your own name for replicas of docker services.
+  For example, if you create a service called 'nginx' with three replicas, then the corresponding
+  three containers will have these names like this: 'nginx.some_random_string_that_makes_it_unique'.
+  The random part is added by docker to make the container name unique. If you ever restart or
+  delete and recreate the service, then new containers will be created with new unique names.
+  But this is not really useful when you want to collect data for a given replica of a given service.
+  The common_name tag value will replace the random part with the hostname, so
+  'service_name.some_random_string_that_makes_it_unique' becomes 'service_name.hostname'.
+  With this trick, you will be able to aggregate data for a given service+hostname pair in a time
+  interval which contains docker service restarts/recreations. Be aware that this trick will not work
+  properly if you have multiple replicas of a service on a single host machine.
+
 
 
 It is a good practice to check your data with "-v -n" before sending them to a live server.
