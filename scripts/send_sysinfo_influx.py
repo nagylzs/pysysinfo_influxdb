@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
+import re
 import datetime
 import functools
 import time
-
+import subprocess
 import sys
 import pprint
 import argparse
@@ -178,8 +179,74 @@ def get_fan_stats():
     return result
 
 
+def _to_docker_factor(code):
+    code = code.strip()
+    if code in ['T', 'TB']:
+        return 1024 ** 4
+    elif code in ['G', 'GB']:
+        return 1024 ** 3
+    elif code in ['GiB']:
+        return 1000 ** 3
+    elif code in ['M', 'MB']:
+        return 1024 ** 2
+    elif code in ['Mi', 'MiB']:
+        return 1000 ** 2
+    elif code in ['K', 'KB', 'kB']:
+        return 1024
+    elif code in ['', 'B', '%']:
+        return 1
+    else:
+        raise ValueError("Uknown factor: %s" % code)
+
+
+def _parse_docker_value(s):
+    res = re.match(r"^([\d\.]+)\s*([^\s]*)$", s.strip())
+    svalue, sfactor_code = res.groups()
+    return float(svalue) * _to_docker_factor(sfactor_code)
+
+
+def _parse_docker_pair(s):
+    idx = s.find("/")
+    left, right = s[:idx], s[idx + 1:]
+    return _parse_docker_value(left), _parse_docker_value(right)
+
+
+def get_docker_stats():
+    result = []
+    cmd = r'''docker stats --all --format "table {{.Container}}|{{.Name}}|{{.CPUPerc}}|{{.MemPerc}}|{{.MemUsage}}|{{.NetIO}}|{{.BlockIO}}|{{.PIDs}}"  --no-stream'''
+    lines = subprocess.check_output(cmd, shell=True).decode("UTF-8").split("\n")
+    for line in lines[1:]:
+        line = line.strip()
+        if not line:
+            continue
+        cid, cname, cpu_perc, mem_perc, mem_usage, net_io, block_io, pid_cnt = line.split("|")
+        memory_used, memory_limit = _parse_docker_pair(mem_usage)
+        net_sent, net_received = _parse_docker_pair(net_io)
+        block_read, block_written = _parse_docker_pair(block_io)
+        sinspect = subprocess.check_output("docker inspect %s" % cid, shell=True).decode("UTF-8")
+        inspect = json.loads(sinspect)[0]
+        item = {
+            'tags': {'container': cid, 'name': cname, },
+            'fields': {
+                'cpu_percent': _parse_docker_value(cpu_perc),
+                'memory_percent': _parse_docker_value(mem_perc),
+                'memory_used': memory_used,
+                'memory_limit': memory_limit,
+                'network_sent': net_sent,
+                'network_received': net_received,
+                'block_read': block_read,
+                'block_written': block_written,
+                'pid_cnt': int(pid_cnt)
+            }
+        }
+        for key in inspect["State"]:
+            item['tags']["state_%s" % key] = inspect["State"][key]
+        result.append(item)
+    return result
+
+
 def get_all_stats():
-    result = ChainMap(
+    return ChainMap(
         get_load_stats(),
         get_cpu_stats(),
         get_vm_stats(),
@@ -188,7 +255,6 @@ def get_all_stats():
         get_net_io_stats(),
         get_fan_stats(),
     )
-    return result
 
 
 def debug(args, s):
@@ -217,6 +283,14 @@ def main(args):
             data["time"] = now
             data["tags"].update(default_extra_tags)
             points.append(data)
+
+        if args.docker_stats:
+            for data in get_docker_stats():
+                data["measurement"] = "docker"
+                data["time"] = now
+                data["tags"].update(default_extra_tags)
+                points.append(data)
+
         if args.verbose:
             pprint.pprint(points)
         if not args.no_send:
@@ -299,6 +373,8 @@ if __name__ == "__main__":
                              "specify this option.")
     parser.add_argument("-e", "--extra-tags", default=default_extra_tags,
                         help="Extra tags to add, defaults to : '%s' " % default_extra_tags)
+    parser.add_argument("--docker-stats", default=False, action="store_true",
+                        help="Use 'docker stats' to retrieve docker statistics. Works with 18.03+")
 
     parser.add_argument("-l", "--loop", default=None, type=float,
                         help="Send data in an endless loop, wait the specified number of seconds between"
