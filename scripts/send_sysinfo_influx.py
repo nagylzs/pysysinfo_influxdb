@@ -201,8 +201,11 @@ def _to_docker_factor(code):
 
 def _parse_docker_value(s):
     res = re.match(r"^([\d\.]+)\s*([^\s]*)$", s.strip())
-    svalue, sfactor_code = res.groups()
-    return float(svalue) * _to_docker_factor(sfactor_code)
+    if res:
+        svalue, sfactor_code = res.groups()
+        return float(svalue) * _to_docker_factor(sfactor_code)
+    else:
+        raise Exception("Cannot parse docker value: %s" % repr(s))
 
 
 def _parse_docker_pair(s):
