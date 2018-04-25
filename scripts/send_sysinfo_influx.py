@@ -199,8 +199,20 @@ def _to_docker_factor(code):
         raise ValueError("Uknown factor: %s" % code)
 
 
+numeric_const_pattern = r"""(
+    [-+]? # optional sign
+    (?:
+         (?: \d* \. \d+ ) # .1 .12 .123 etc 9.1 etc 98.1 etc
+         |
+         (?: \d+ \.? ) # 1. 12. 123. etc 1 12 123 etc
+    )
+    # followed by optional exponent part if desired
+    (?: [Ee] [+-]? \d+ ) ?
+    )"""
+numeric_with_mu = "^" + numeric_const_pattern + r"\s*([^\s]*)$"
+float_mu_pat = re.compile(numeric_with_mu, re.VERBOSE)
 def _parse_docker_value(s):
-    res = re.match(r"^([\d\.]+)\s*([^\s]*)$", s.strip())
+    res = float_mu_pat.match(s.strip())
     if res:
         svalue, sfactor_code = res.groups()
         return float(svalue) * _to_docker_factor(sfactor_code)
