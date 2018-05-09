@@ -179,7 +179,7 @@ def get_fan_stats():
     return result
 
 
-def _to_docker_factor(code):
+def _to_docker_factor(code, original_text=None):
     code = code.strip()
     if code in ['T', 'TB']:
         return 1024 ** 4
@@ -196,7 +196,8 @@ def _to_docker_factor(code):
     elif code in ['', 'B', '%']:
         return 1
     else:
-        raise ValueError("Uknown factor: %s" % code)
+        # See Issue #1
+        raise ValueError("Uknown factor: %s, original_text=%s" % (code, repr(original_text) ))
 
 
 numeric_const_pattern = r"""(
@@ -215,7 +216,7 @@ def _parse_docker_value(s):
     res = float_mu_pat.match(s.strip())
     if res:
         svalue, sfactor_code = res.groups()
-        return float(svalue) * _to_docker_factor(sfactor_code)
+        return float(svalue) * _to_docker_factor(sfactor_code ,s)
     else:
         raise Exception("Cannot parse docker value: %s" % repr(s))
 
